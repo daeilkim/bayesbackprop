@@ -8,45 +8,7 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
 
-def xavier_init(fan_in, fan_out, constant=1):
-    """ Xavier initialization of network weights"""
-    # https://stackoverflow.com/questions/33640581/how-to-do-xavier-initialization-on-tensorflow
-    low = -constant*np.sqrt(6.0/(fan_in + fan_out))
-    high = constant*np.sqrt(6.0/(fan_in + fan_out))
-    return tf.random_uniform((fan_in, fan_out),
-                             minval=low, maxval=high,
-                             dtype=tf.float32)
 
-
-def train(network_architecture, training_epochs=10, batch_size=100, learning_rate=1e-3, display_step=1):
-    # Training cycle
-    bayes_backprop = BayesBackprop(network_architecture,
-                             learning_rate=learning_rate,
-                             batch_size=batch_size)
-
-    for epoch in range(training_epochs):
-        avg_cost = 0.
-        total_batch = int(n_samples / batch_size)
-
-        # Loop over all batches
-        for i in range(total_batch):
-            batch_xs, batch_labels = mnist.train.next_batch(batch_size)
-
-            # Fit training using batch data
-            cost = bayes_backprop.partial_fit(batch_xs, batch_labels)
-
-            # Compute average loss
-            avg_cost += cost / n_samples * batch_size
-
-        # Display logs per epoch step
-        if epoch % display_step == 0:
-            feed = {bayes_backprop.x: mnist.test.images,
-                    bayes_backprop.y_: mnist.test.labels}
-            print "Epoch:", '%04d' % (epoch+1), \
-                  "cost = ","{:.9f}".format(avg_cost), \
-                  "Accuracy: %2.3f" % (bayes_backprop.accuracy.eval(feed_dict=feed)*100)
-
-    return bayes_backprop
 
 
 '''
@@ -110,6 +72,47 @@ class BayesBackprop():
         return cost
 
 
+
+def xavier_init(fan_in, fan_out, constant=1):
+    """ Xavier initialization of network weights"""
+    # https://stackoverflow.com/questions/33640581/how-to-do-xavier-initialization-on-tensorflow
+    low = -constant*np.sqrt(6.0/(fan_in + fan_out))
+    high = constant*np.sqrt(6.0/(fan_in + fan_out))
+    return tf.random_uniform((fan_in, fan_out),
+                             minval=low, maxval=high,
+                             dtype=tf.float32)
+
+
+def train(network_architecture, training_epochs=10, batch_size=100, learning_rate=1e-3, display_step=1):
+    # Training cycle
+    bayes_backprop = BayesBackprop(network_architecture,
+                             learning_rate=learning_rate,
+                             batch_size=batch_size)
+
+    for epoch in range(training_epochs):
+        avg_cost = 0.
+        total_batch = int(n_samples / batch_size)
+
+        # Loop over all batches
+        for i in range(total_batch):
+            batch_xs, batch_labels = mnist.train.next_batch(batch_size)
+
+            # Fit training using batch data
+            cost = bayes_backprop.partial_fit(batch_xs, batch_labels)
+
+            # Compute average loss
+            avg_cost += cost / n_samples * batch_size
+
+        # Display logs per epoch step
+        if epoch % display_step == 0:
+            feed = {bayes_backprop.x: mnist.test.images,
+                    bayes_backprop.y_: mnist.test.labels}
+            print "Epoch:", '%04d' % (epoch+1), \
+                  "cost = ","{:.9f}".format(avg_cost), \
+                  "Accuracy: %2.3f" % (bayes_backprop.accuracy.eval(feed_dict=feed)*100)
+
+    return bayes_backprop
+
 if __name__ == "__main__":
     # Initialize the tensorflow graph
     mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
@@ -120,6 +123,6 @@ if __name__ == "__main__":
              n_features=784, # MNIST data input (img shape: 28*28)
              n_labels=10)  # number of class labels
 
-    vae = train(network_architecture, training_epochs=20)
+    deep_network = train(network_architecture, training_epochs=20)
 
 
