@@ -9,15 +9,12 @@ from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
 
 
-
-
-'''
-Class function that initializes the BayesBackprop Deep Network
-'''
-
-
 class BayesBackprop():
-    def __init__(self, network_architecture, batch_size, learning_rate=0.01):
+    '''
+    Class to define the network architecture
+    '''
+
+    def __init__(self, network_architecture, learning_rate=0.01):
         self.network_architecture = network_architecture
         self.transfer_fct = tf.nn.softplus
         self.learning_rate = learning_rate
@@ -86,8 +83,7 @@ def xavier_init(fan_in, fan_out, constant=1):
 def train(network_architecture, training_epochs=10, batch_size=100, learning_rate=1e-3, display_step=1):
     # Training cycle
     bayes_backprop = BayesBackprop(network_architecture,
-                             learning_rate=learning_rate,
-                             batch_size=batch_size)
+                             learning_rate=learning_rate)
 
     for epoch in range(training_epochs):
         avg_cost = 0.
@@ -124,5 +120,3 @@ if __name__ == "__main__":
              n_labels=10)  # number of class labels
 
     deep_network = train(network_architecture, training_epochs=20)
-
-
