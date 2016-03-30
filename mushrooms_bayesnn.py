@@ -32,7 +32,7 @@ def load_mushroom_data():
 
     le = preprocessing.LabelEncoder()
     le.fit(Y)
-    y = le.transform(Y) * 5
+    y = le.transform(Y)
 
     #have to initialize or get error below
     x_tmp = pd.DataFrame(X,columns=[X.columns[0]])
@@ -46,6 +46,8 @@ def load_mushroom_data():
     oh = preprocessing.OneHotEncoder(categorical_features='all')
     oh.fit(x_tmp)
     x = oh.transform(x_tmp).toarray()
+
+
     return x, y, df
 
 
@@ -80,100 +82,110 @@ def make_nn_funs(layer_sizes, L2_reg, noise_variance, nonlinearity=np.tanh):
 
     return num_weights, predictions, logprob
 
+def update_nn(init_var_params, batch_data, batch_labels):
+    log_posterior = lambda weights, t: logprob(weights, batch_data, batch_labels)
 
-def build_toy_dataset(n_data=100, noise_std=0.1):
-    D = 1
-    rs = npr.RandomState(0)
-    inputs  = np.concatenate([np.linspace(-4, 4, num=n_data/2),
-                              np.linspace(-8, 8, num=n_data/2)])
-    targets = np.cos(inputs) + rs.randn(n_data) * noise_std
-    inputs = (inputs - 4.0) / 4.0
-    inputs  = inputs.reshape((len(inputs), D))
-    targets = targets.reshape((len(targets), D))
-    return inputs, targets
+    # Build variational objective.
+    objective, gradient, unpack_params = \
+        black_box_variational_inference(log_posterior, num_weights, num_samples=20)
+
+    print("Optimizing variational parameters...")
+    variational_params = adam(gradient, init_var_params, step_size=0.1, num_iters=1)
+
+    return variational_params
 
 
+def generate_nn_output(variational_params, inputs, num_weights, num_samples):
+    mean, log_std = variational_params[:num_weights], variational_params[num_weights:]
+    sample_weights = rs.randn(num_samples, num_weights) * np.exp(log_std) + mean
+    outputs = predictions(sample_weights, inputs)
+    return outputs
 
-def reformat(dataset, labels):
-  dataset = dataset.reshape((-1, num_features)).astype(np.float32)
-  # Map 0 to [1.0, 0.0, 0.0 ...], 1 to [0.0, 1.0, 0.0 ...]
-  # labels = (np.arange(num_labels) == labels[:,None]).astype(np.float32)
-  return dataset, labels
+
+def reward_function(action_chosen, label):
+    if action_chosen == 0 and label == 1:
+        # we chose to eat, but was poisoned with probability 1/2
+        if npr.rand() > 0.5:
+            reward = -35
+        else:
+            reward = 5
+    elif action_chosen == 0 and label == 0:
+        # we chose to eat, but mushroom was not poisonous
+        reward = 5
+    else:
+        # we chose not to eat, so we get no reward
+        reward = 0
+    return reward
 
 if __name__ == '__main__':
-    # targets are the true labels
-    # inputs is the feature data set X
-    #inputs, targets = build_toy_dataset()
+    # 1 = poisonous, 0 = safe to eat
     x, y, df = load_mushroom_data()
-    train_data, test_data, train_labels, test_labels = train_test_split(x, y, test_size=0.5)
-    num_features = train_data.shape[1]
-    num_labels = 2
-    num_units = 100
-    train_data, train_labels = reformat(train_data, train_labels)
-    test_data, test_labels = reformat(test_data, test_labels)
+    num_features = x.shape[1]
+    num_datums = x.shape[0]
 
+    # Parameters for how we wish to learn
+    batch_size = 64
+    num_steps = 1000
+    num_explore = 100 # number to choose random actions
+    experience = []
+    agent_reward = 0
+    oracle_reward = 0
+    cumulative_regret = 0
+    cumulative_regret_over_time = []
+
+    # Encode one of K actions as a one of K-vectors
+    # Assume [1,0] = eat | [0,1] do not eat
+    num_units = 50
+    num_actions = 2
+    action_vectors = np.identity(num_actions)
+
+    # Define the archtiecture for the nuerla network
     # Specify inference problem by its unnormalized log-posterior.
     rbf = lambda x: norm.pdf(x, 0, 1)
-    sq = lambda x: np.sin(x)
+
     num_weights, predictions, logprob = \
-        make_nn_funs(layer_sizes=[num_features, 10, 10, 1], L2_reg=0.01,
-                     noise_variance = 0.01, nonlinearity=rbf)
-
-    print('# Weights: %d' % num_weights)
-
-    batch_size = 64
-    num_steps = 100
-    for step in range(num_steps):
-        offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
-        #log_posterior = lambda weights, t: logprob(weights, inputs, targets)
-        batch_data = train_data[offset:(offset + batch_size), :]
-        batch_labels = train_labels[offset:(offset + batch_size), :]
-        log_posterior = lambda weights, t: logprob(weights, batch_data, batch_labels)
-
-        # Build variational objective.
-        objective, gradient, unpack_params = \
-            black_box_variational_inference(log_posterior, num_weights,
-                                            num_samples=20)
-
-    # Set up figure.
-    '''
-    fig = plt.figure(figsize=(8,8), facecolor='white')
-    ax = fig.add_subplot(111, frameon=False)
-    plt.ion()
-    plt.show(block=False)
-    '''
-
-    def callback(params, t, g):
-        print("Iteration {} lower bound {}".format(t, -objective(params, t)))
-
-        # Sample functions from posterior.
-        num_samples = 5
-        rs = npr.RandomState(0)
-        mean, log_std = unpack_params(params)
-        #rs = npr.RandomState(0)
-        sample_weights = rs.randn(num_samples, num_weights) * np.exp(log_std) + mean
-        outputs = predictions(sample_weights, test_data)
-        accuracy_error = np.sum(np.abs(test_labels - outputs))
-        print('Accuracy Error: %.3f' % accuracy_error)
-        # plot_inputs = np.linspace(-8, 8, num=400)
-        # outputs = predictions(sample_weights, np.expand_dims(plot_inputs, 1))
-
-        # Plot data and functions.
-        '''
-        plt.cla()
-        ax.plot(inputs.ravel(), targets.ravel(), 'bx')
-        ax.plot(plot_inputs, outputs[:, :, 0].T)
-        ax.set_ylim([-2, 3])
-        plt.draw()
-        plt.pause(1.0/60.0)
-        '''
+        make_nn_funs(layer_sizes=[num_features+num_actions, num_units, num_units, 1],
+                     L2_reg=0.01,
+                     noise_variance=0.01,
+                     nonlinearity=rbf)
 
     # Initialize variational parameters
     rs = npr.RandomState(0)
-    init_mean    = rs.randn(num_weights)
+    num_samples = 5
+    init_mean = rs.randn(num_weights)
     init_log_std = -5 * np.ones(num_weights)
-    init_var_params = np.concatenate([init_mean, init_log_std])
+    variational_params = np.concatenate([init_mean, init_log_std])
 
-    print("Optimizing variational parameters...")
-    variational_params = adam(gradient, init_var_params,
-                              step_size=0.1, num_iters=1000, callback=callback)
+    for step in range(num_steps):
+        # Grab a random datum
+        datum_id = npr.randint(0, num_datums)
+
+        # Assess expected reward across all possible actions (loop over context + action vectors)
+        rewards = []
+        for aa in range(num_actions):
+            context = np.hstack((x[datum_id, :], action_vectors[aa,:]))
+            outputs = generate_nn_output(variational_params,
+                                         np.expand_dims(context,0),
+                                         num_weights,
+                                         num_samples)
+            rewards.append(np.mean(outputs))
+
+        # Check which is greater and choose that [1,0] = eat | [0,1] do not eat
+        # If argmax returns 0, then we eat, otherwise we don't
+        action_chosen = np.argmax(rewards)
+        reward = reward_function(action_chosen, y[datum_id])
+
+        # Calculate the cumulative regret
+        oracle_reward += 5
+        agent_reward += reward
+        cumulative_regret = oracle_reward - agent_reward
+        cumulative_regret_over_time.append(cumulative_regret)
+
+        # Store the experience of that reward as a training/data pair
+        experience.append([context, reward])
+
+        # Choose the action that maximizes the expected reward or go with epsilon greedy
+        if len(experience) > 64:
+            print("Train")
+
+
