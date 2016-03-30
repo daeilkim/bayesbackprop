@@ -89,8 +89,7 @@ def update_nn(init_var_params, batch_data, batch_labels):
     objective, gradient, unpack_params = \
         black_box_variational_inference(log_posterior, num_weights, num_samples=20)
 
-    print("Optimizing variational parameters...")
-    variational_params = adam(gradient, init_var_params, step_size=0.1, num_iters=1)
+    variational_params = adam(gradient, init_var_params, step_size=0.01, num_iters=1)
 
     return variational_params
 
@@ -102,20 +101,32 @@ def generate_nn_output(variational_params, inputs, num_weights, num_samples):
     return outputs
 
 
+
+
+
+
 def reward_function(action_chosen, label):
     if action_chosen == 0 and label == 1:
-        # we chose to eat, but was poisoned with probability 1/2
+        # we chose to eat a poisonous mushroom with probability 1/2 we get really punished
         if npr.rand() > 0.5:
             reward = -35
         else:
             reward = 5
     elif action_chosen == 0 and label == 0:
-        # we chose to eat, but mushroom was not poisonous
         reward = 5
     else:
         # we chose not to eat, so we get no reward
         reward = 0
-    return reward
+
+    if label == 1:
+        oracle_reward = 0
+    else:
+        oracle_reward = 5
+    return reward, oracle_reward
+
+
+
+
 
 if __name__ == '__main__':
     # 1 = poisonous, 0 = safe to eat
@@ -124,8 +135,8 @@ if __name__ == '__main__':
     num_datums = x.shape[0]
 
     # Parameters for how we wish to learn
-    batch_size = 64
-    num_steps = 1000
+    batch_size = 128
+    num_steps = 10000
     num_explore = 100 # number to choose random actions
     experience = []
     agent_reward = 0
@@ -156,16 +167,23 @@ if __name__ == '__main__':
     init_log_std = -5 * np.ones(num_weights)
     variational_params = np.concatenate([init_mean, init_log_std])
 
+    # Set up figure.
+    fig = plt.figure(figsize=(8,8), facecolor='white')
+    ax = fig.add_subplot(111, frameon=False)
+    plt.ion()
+    plt.show(block=False)
+
     for step in range(num_steps):
         # Grab a random datum
         datum_id = npr.randint(0, num_datums)
 
         # Assess expected reward across all possible actions (loop over context + action vectors)
         rewards = []
+        contexts = np.zeros((num_actions, num_features+num_actions))
         for aa in range(num_actions):
-            context = np.hstack((x[datum_id, :], action_vectors[aa,:]))
+            contexts[aa,:] = np.hstack((x[datum_id, :], action_vectors[aa,:]))
             outputs = generate_nn_output(variational_params,
-                                         np.expand_dims(context,0),
+                                         np.expand_dims(contexts[aa,:],0),
                                          num_weights,
                                          num_samples)
             rewards.append(np.mean(outputs))
@@ -173,19 +191,33 @@ if __name__ == '__main__':
         # Check which is greater and choose that [1,0] = eat | [0,1] do not eat
         # If argmax returns 0, then we eat, otherwise we don't
         action_chosen = np.argmax(rewards)
-        reward = reward_function(action_chosen, y[datum_id])
+        reward, oracle_reward = reward_function(action_chosen, y[datum_id])
 
         # Calculate the cumulative regret
-        oracle_reward += 5
-        agent_reward += reward
-        cumulative_regret = oracle_reward - agent_reward
+        cumulative_regret += oracle_reward - agent_reward
         cumulative_regret_over_time.append(cumulative_regret)
 
+        if (step % 100) == 0:
+            print("Cumulative Regret at Step %d: %d" % (step, cumulative_regret))
+
+            plt.cla()
+            ax.plot(cumulative_regret_over_time)
+            plt.draw()
+            plt.pause(1.0/60.0)
+
         # Store the experience of that reward as a training/data pair
-        experience.append([context, reward])
+        experience.append([contexts[action_chosen, :], reward])
 
         # Choose the action that maximizes the expected reward or go with epsilon greedy
-        if len(experience) > 64:
-            print("Train")
+        if len(experience) > batch_size:
+            batch_data = np.zeros((batch_size, num_features+num_actions))
+            batch_labels = np.zeros((batch_size, 1))
+            indices = np.random.choice(len(experience), batch_size, replace=False)
+            for ix in range(batch_size):
+                ind = indices[ix]
+                batch_data[ix, :] = experience[ix][0]
+                batch_labels[ix, :] = experience[ix][1]
+            variational_params = update_nn(variational_params, batch_data, batch_labels)
+
 
 
