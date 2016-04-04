@@ -30,14 +30,28 @@ def rmsprop(grad, x, callback=None, num_iters=100, step_size=0.1, gamma=0.9, eps
         x -= step_size * g/(np.sqrt(avg_sq_grad) + eps)
     return x
 
-def adam(grad, x, callback=None, num_iters=100,
-         step_size=0.001, b1=0.9, b2=0.999, eps=10**-8):
+def adam(grad,
+         x,
+         batch_id=None,
+         num_batches=None,
+         callback=None,
+         num_iters=100,
+         step_size=0.001,
+         b1=0.9,
+         b2=0.999,
+         eps=10**-8):
     """Adam as described in http://arxiv.org/pdf/1412.6980.pdf.
     It's basically RMSprop with momentum and some correction terms."""
     m = np.zeros(len(x))
     v = np.zeros(len(x))
+
+    if batch_id is not None:
+        scale_factor = (2**(num_batches-batch_id)) / (2**(num_batches-1))
+    else:
+        scale_factor = 1
+
     for i in range(num_iters):
-        g = grad(x, i)
+        g = grad(x, scale_factor)
         if callback: callback(x, i, g)
         m = (1 - b1) * g      + b1 * m  # First  moment estimate.
         v = (1 - b2) * (g**2) + b2 * v  # Second moment estimate.

@@ -24,11 +24,11 @@ def black_box_variational_inference(logprob, D, num_samples):
         return 0.5 * D * (1.0 + np.log(2*np.pi)) + np.sum(log_std)
 
     rs = npr.RandomState(0)
-    def variational_objective(params, t):
+    def variational_objective(params, scale_factor):
         """Provides a stochastic estimate of the variational lower bound."""
         mean, log_std = unpack_params(params)
         samples = rs.randn(num_samples, D) * np.exp(log_std) + mean
-        lower_bound = gaussian_entropy(log_std) + np.mean(logprob(samples, t))
+        lower_bound = scale_factor*gaussian_entropy(log_std) + np.mean(logprob(samples))
         return -lower_bound
 
     gradient = grad(variational_objective)

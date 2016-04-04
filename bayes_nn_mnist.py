@@ -154,20 +154,30 @@ if __name__ == '__main__':
 
     # Train with sgd
     batch_idxs = make_batches(train_images.shape[0], batch_size)
+    num_batches = len(batch_idxs)
+
     cur_dir = np.zeros(num_weights*2)
 
     for epoch in range(num_epochs):
+        batch_counter = 0
         for idxs in batch_idxs:
             log_posterior = lambda weights: logprob(weights, train_images[idxs], train_labels[idxs])
 
             objective, gradient, unpack_params = \
                 black_box_variational_inference(log_posterior, num_weights, num_samples)
 
+            '''
             grad_w = gradient(variational_params)
             cur_dir = momentum * cur_dir + (1.0 - momentum) * grad_w
             variational_params -= learning_rate * cur_dir
-
-            #variational_params = adam(gradient, variational_params, step_size=0.1, num_iters=10)
+            '''
+            variational_params = adam(gradient,
+                                      variational_params,
+                                      num_batches=num_batches,
+                                      batch_id=batch_counter,
+                                      step_size=0.01,
+                                      num_iters=10)
 
             weights = extract_weights(variational_params, num_weights)
             print_perf(epoch, weights)
+            batch_counter += 1
