@@ -10,7 +10,7 @@ from keras import backend as K
 
 batch_size = 128
 nb_classes = 10
-nb_epoch = 1
+nb_epoch = 5
 
 def load_mnist():
     # the data, shuffled and split between train and test sets
@@ -51,15 +51,6 @@ model.fit(X_train, Y_train,
           batch_size=batch_size, nb_epoch=nb_epoch,
           show_accuracy=True, verbose=2,
           validation_data=(X_test, Y_test))
-
-num_timepoints = 50
-for t in xrange(num_timepoints):
-    model.fit(X_train, Y_train,
-          batch_size=batch_size, nb_epoch=nb_epoch,
-          show_accuracy=True, verbose=2,
-          validation_data=(X_test, Y_test))
-    output = Sequential._predict(X)
-
 
 score = model.evaluate(X_test, Y_test,
                        show_accuracy=True, verbose=0)

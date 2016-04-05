@@ -36,22 +36,14 @@ F = num_features + num_actions
 model = Sequential()
 model.add(Dense(100, input_shape=(F,)))
 model.add(Activation('relu'))
-#model.add(Dropout(0.2))
 model.add(Lambda(lambda x: K.dropout(x, level=0.2)))
 model.add(Dense(100, init='glorot_uniform'))
 model.add(Activation('relu'))
-#model.add(Dropout(0.2))
 model.add(Lambda(lambda x: K.dropout(x, level=0.2)))
 model.add(Dense(1))
 
 rms = RMSprop()
 model.compile(loss='mean_squared_error', optimizer=rms)
-
-# Set up figure.
-fig = plt.figure(figsize=(8,8), facecolor='white')
-ax = fig.add_subplot(111, frameon=False)
-plt.ion()
-plt.show(block=False)
 
 action_matrix = np.eye(num_actions)
 
@@ -61,6 +53,12 @@ num_actions = 2
 action_matrix = np.eye(num_actions)
 experience_context = []
 experience_rewards = []
+
+# Set up figure.
+fig = plt.figure(figsize=(8,8), facecolor='white')
+ax = fig.add_subplot(111, frameon=False)
+plt.ion()
+plt.show(block=False)
 
 print('Exploring randomly for %s number of steps' % num_random_steps)
 for rr in xrange(num_random_steps):
@@ -91,7 +89,7 @@ for step in range(num_steps):
               np.array(experience_rewards),
               batch_size=batch_size,
               nb_epoch=1,
-              verbose=0)
+              verbose=1)
 
     #Randomly select a datapoint
     datum_id = np.random.randint(0, num_datums)
